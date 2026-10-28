@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GeoPulse ETL · Centro de control agroclimático</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <style>
+    :root {
+      --bg: #07090e;
+      --panel: #10151c;
+      --panel-2: #161d27;
+      --line: rgba(156, 173, 196, 0.16);
+      --text: #e8eef7;
+      --muted: #93a0b4;
+      --teal: #6ee7c5;
+      --optimal: #3ddc97;
+      --moderate: #f5c451;
+      --high: #ff8a3d;
+      --critical: #ff4d6a;
+      --idle: #8b97a8;
+      --blue: #8eb6ff;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: Manrope, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(900px 420px at 10% -10%, rgba(110, 231, 197, 0.08), transparent 55%),
+        radial-gradient(700px 380px at 100% 0%, rgba(255, 138, 61, 0.06), transparent 50%),
+        var(--bg);
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0 0 auto 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--optimal), var(--moderate), var(--high), var(--critical));
+    }
+    button, input { font: inherit; }
+    .app {
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 20px 20px 14px;
+    }
+    header {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 18px;
+      align-items: center;
+    }
+    .brand { display: flex; gap: 12px; align-items: center; }
+    .mark {
+      width: 38px;
+      height: 38px;
+      border: 1.5px solid var(--teal);
+      border-radius: 50%;
+      box-shadow: inset 0 0 0 6px rgba(110, 231, 197, 0.08), 0 0 0 6px rgba(110, 231, 197, 0.05);
+      position: relative;
+    }
+    .mark::before, .mark::after {
+      content: "";
+      position: absolute;
+      background: var(--teal);
+    }
+    .mark::before { width: 16px; height: 1.5px; left: 10px; top: 17px; }
+    .mark::after { width: 1.5px; height: 16px; left: 17px; top: 10px; }
+    .eyebrow {
+      margin: 0;
+      color: var(--teal);
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 0; font-size: 28px; letter-spacing: -0.04em; }
+    .tagline { margin: 0; color: var(--muted); }
+    .header-actions { display: flex; align-items: center; gap: 12px; }
+    #clock {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .status {
+      margin: 0;
+      max-width: 280px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .status.ok { color: var(--optimal); }
+    .status.running { color: var(--moderate); }
+    .status.error { color: var(--critical); }
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 16px;
+      background: var(--teal);
+      color: #06231c;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.6; cursor: progress; }
+    button:focus-visible, .chip:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .kpi, .map-panel, aside, .chips {
+      background: rgba(16, 21, 28, 0.92);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+    }
+    .kpi { padding: 12px 14px 14px; }
+    .kpi p { margin: 0 0 6px; color: var(--muted); font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
+    .kpi strong {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 26px;
+      font-weight: 500;
+      letter-spacing: -0.04em;
+    }
+    .chips {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 8px;
+    }
+    .chip {
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--text);
+      border-radius: 999px;
+      padding: 8px 12px;
+      white-space: nowrap;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .chip.active { background: var(--panel-2); }
+    .workspace {
+      flex: 1;
+      min-height: 560px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 400px;
+      gap: 14px;
+    }
+    .map-panel { position: relative; min-height: 560px; overflow: hidden; }
+    #map { height: 100%; min-height: 560px; background: #0b1016; }
+    .legend {
+      position: absolute;
+      z-index: 500;
+      left: 12px;
+      bottom: 12px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: rgba(7, 9, 14, 0.88);
+      border: 1px solid var(--line);
+      font-size: 12px;
+    }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    aside { padding: 16px; display: flex; flex-direction: column; min-height: 560px; }
+    aside h2 { margin: 4px 0 2px; letter-spacing: -0.03em; }
+    .muted, .note { color: var(--muted); }
+    .note { margin: 8px 0 0; font-size: 12px; line-height: 1.45; }
+    .badge {
+      align-self: flex-start;
+      margin-top: 8px;
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 12px;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 14px 0;
+    }
+    .metrics div {
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: var(--panel-2);
+    }
+    .metrics dt { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .metrics dd {
+      margin: 4px 0 0;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 16px;
+    }
+    .chart-wrap { position: relative; flex: 1; min-height: 280px; }
+    #chart { width: 100%; height: 100%; }
+    footer {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+      background: #121820;
+      color: var(--text);
+      box-shadow: none;
+      border-radius: 12px;
+    }
+    .leaflet-popup-content-wrapper { border: 1px solid var(--line); }
+    .leaflet-popup-content { margin: 10px 12px; font-family: Manrope, sans-serif; }
+    .leaflet-control-zoom a {
+      background: #121820;
+      color: var(--text);
+      border-color: var(--line);
+    }
+    .leaflet-bar { border: 1px solid var(--line); }
+    @media (max-width: 980px) {
+      header, .workspace { grid-template-columns: 1fr; }
+      .kpis { grid-template-columns: 1fr 1fr; }
+      .kpi:last-child { grid-column: 1 / -1; }
+      .header-actions { flex-wrap: wrap; }
+      .tagline { display: none; }
+      #map, .map-panel, aside { min-height: 70vh; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="mark" aria-hidden="true"></div>
+        <div>
+          <p class="eyebrow">Centro de control agroclimático</p>
+          <h1>GeoPulse</h1>
+        </div>
+      </div>
+      <p class="tagline">Arco mediterráneo y España interior · ocho nodos reales</p>
+      <div class="header-actions">
+        <time id="clock"></time>
+        <p id="status" class="status" role="status">Conectando con la malla…</p>
+        <button id="run-etl" type="button">Ejecutar Pipeline ETL Ahora</button>
+      </div>
+    </header>
+
+    <section class="kpis" aria-label="Indicadores">
+      <article class="kpi"><p>Zonas</p><strong id="kpi-zones">—</strong></article>
+      <article class="kpi"><p>Estrés medio</p><strong id="kpi-stress">—</strong></article>
+      <article class="kpi"><p>VPD medio</p><strong id="kpi-vpd">—</strong></article>
+      <article class="kpi"><p>Críticas</p><strong id="kpi-critical">—</strong></article>
+      <article class="kpi"><p>Zonas anómalas</p><strong id="kpi-anomaly">—</strong></article>
+    </section>
+
+    <div class="chips" id="chips" aria-label="Zonas de monitoreo"></div>
+
+    <main class="workspace">
+      <section class="map-panel">
+        <div id="map" role="application" aria-label="Mapa de riesgo agroclimático"></div>
+        <div class="legend">
+          <span><i class="dot" style="background:#3ddc97"></i>Óptimo</span>
+          <span><i class="dot" style="background:#f5c451"></i>Moderado</span>
+          <span><i class="dot" style="background:#ff8a3d"></i>Estrés alto</span>
+          <span><i class="dot" style="background:#ff4d6a"></i>Crítico</span>
+        </div>
+      </section>
+      <aside id="detail">
+        <p class="eyebrow">Nodo seleccionado</p>
+        <h2 id="zone-name">Selecciona un punto</h2>
+        <p id="zone-meta" class="muted">El clic sobre el mapa abre VPD, humedad del suelo y estrés hídrico.</p>
+        <span id="risk-badge" class="badge" hidden></span>
+        <dl class="metrics" id="metrics"></dl>
+        <div class="chart-wrap"><canvas id="chart"></canvas></div>
+        <p id="chart-note" class="note"></p>
+      </aside>
+    </main>
+
+    <footer>
+      VPD por la ecuación de Tetens (FAO-56). Estrés hídrico = 40&nbsp;% déficit ET₀ frente a la lluvia + 60&nbsp;% agotamiento entre capacidad de campo (0,35 m³/m³) y marchitez (0,12 m³/m³).
+      Datos meteorológicos de <a href="https://open-meteo.com/" style="color:#6ee7c5">Open-Meteo</a>.
+      Mapa base oscuro © Esri. CartoDB Dark Matter exige API key y devuelve un mosaico vacío.
+    </footer>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+  <script>
+    const RISK = {
+      OPTIMAL: { color: "#3ddc97", label: "Óptimo" },
+      MODERATE: { color: "#f5c451", label: "Moderado" },
+      HIGH_STRESS: { color: "#ff8a3d", label: "Estrés alto" },
+      CRITICAL: { color: "#ff4d6a", label: "Crítico" },
+    };
+
+    const statusEl = document.getElementById("status");
+    const chipsEl = document.getElementById("chips");
+    let features = [];
+    let selectedId = null;
+    let requestToken = 0;
+    let chart = null;
+    const markers = new Map();
+
+    const map = L.map("map", { zoomControl: true, attributionControl: true }).setView([40.2, -3.2], 6);
+    // CartoDB Dark Matter (basemaps.cartocdn.com/dark_all) responde con un
+    // mosaico "API key required". Esri Dark Gray conserva el mismo tema
+    // oscuro de centro de control, sin credenciales.
+    L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+      {
+        attribution: "Tiles &copy; Esri, HERE, Garmin, USGS",
+        maxZoom: 16,
+      }
+    ).addTo(map);
+    L.control.scale({ imperial: false, position: "bottomright" }).addTo(map);
+    const layerGroup = L.featureGroup().addTo(map);
+
+    const nowLine = {
+      id: "nowLine",
+      afterDatasetsDraw(chartInstance, _args, options) {
+        const index = options ? options.index : -1;
+        const meta = chartInstance.getDatasetMeta(0);
+        if (index < 0 || !meta.data[index]) return;
+        const point = meta.data[index];
+        const { top, bottom } = chartInstance.chartArea;
+        const ctx = chartInstance.ctx;
+        ctx.save();
+        ctx.beginPath();
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = "rgba(232, 238, 247, 0.55)";
+        ctx.moveTo(point.x, top);
+        ctx.lineTo(point.x, bottom);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(232, 238, 247, 0.75)";
+        ctx.font = "11px 'IBM Plex Mono', monospace";
+        ctx.fillText("ahora", point.x + 6, top + 14);
+        ctx.restore();
+      },
+    };
+
+    function tick() {
+      const label = new Date().toLocaleString("es-ES", {
+        timeZone: "Europe/Madrid",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        timeZoneName: "short",
+      });
+      document.getElementById("clock").textContent = label;
+    }
+    tick();
+    setInterval(tick, 1000);
+
+    function setStatus(mode, text) {
+      statusEl.className = "status " + (mode || "");
+      statusEl.textContent = text;
+    }
+
+    function fmt(value, digits) {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+      return Number(value).toLocaleString("es-ES", {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+      });
+    }
+
+    function colorFor(feature) {
+      const level = feature.properties.risk_level;
+      return (RISK[level] && RISK[level].color) || "#8b97a8";
+    }
+
+    function telemetryFeatures() {
+      return features.filter((feature) => feature.properties.has_telemetry);
+    }
+
+    function renderKpis() {
+      const live = telemetryFeatures();
+      document.getElementById("kpi-zones").textContent = String(features.length);
+      if (!live.length) {
+        document.getElementById("kpi-stress").textContent = "—";
+        document.getElementById("kpi-vpd").textContent = "—";
+        document.getElementById("kpi-critical").textContent = "0";
+        document.getElementById("kpi-anomaly").textContent = "0";
+        return;
+      }
+      const stress = live.reduce((sum, feature) => sum + feature.properties.hydric_stress_index, 0) / live.length;
+      const vpd = live.reduce((sum, feature) => sum + feature.properties.vpd_kpa, 0) / live.length;
+      const critical = live.filter((feature) => feature.properties.risk_level === "CRITICAL").length;
+      const anomalies = live.filter((feature) => feature.properties.is_anomaly).length;
+      document.getElementById("kpi-stress").textContent = fmt(stress, 1);
+      document.getElementById("kpi-vpd").textContent = fmt(vpd, 2);
+      document.getElementById("kpi-critical").textContent = String(critical);
+      document.getElementById("kpi-anomaly").textContent = String(anomalies);
+      document.getElementById("kpi-critical").style.color = critical ? "#ff4d6a" : "#e8eef7";
+    }
+
+    function renderChips() {
+      chipsEl.innerHTML = "";
+      features.forEach((feature) => {
+        const props = feature.properties;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "chip" + (props.zone_id === selectedId ? " active" : "");
+        button.style.borderColor = colorFor(feature);
+        button.textContent = props.name;
+        button.addEventListener("click", () => selectZone(props.zone_id, { scroll: true }));
+        chipsEl.appendChild(button);
+      });
+    }
+
+    function renderMap() {
+      layerGroup.clearLayers();
+      markers.clear();
+      features.forEach((feature) => {
+        const [lon, lat] = feature.geometry.coordinates;
+        const props = feature.properties;
+        const color = colorFor(feature);
+        const marker = L.circleMarker([lat, lon], {
+          radius: props.zone_id === selectedId ? 12 : 8,
+          color: props.is_anomaly ? "#f4f7fb" : color,
+          weight: props.is_anomaly ? 2.5 : 1.5,
+          fillColor: color,
+          fillOpacity: 0.92,
+        });
+        const stress = props.has_telemetry ? fmt(props.hydric_stress_index, 1) : "sin datos";
+        const risk = (RISK[props.risk_level] && RISK[props.risk_level].label) || "Sin telemetría";
+        marker.bindPopup(`<strong>${props.name}</strong><br>${props.region}<br>${props.crop_or_land_type}<br>${risk} · HSI ${stress}`);
+        marker.on("click", () => selectZone(props.zone_id, { scroll: true }));
+        marker.addTo(layerGroup);
+        markers.set(props.zone_id, marker);
+      });
+      if (features.length) {
+        map.fitBounds(layerGroup.getBounds().pad(0.18), { animate: false });
+      }
+      setTimeout(() => map.invalidateSize(), 150);
+    }
+
+    function paintSelection() {
+      markers.forEach((marker, id) => {
+        const feature = features.find((item) => item.properties.zone_id === id);
+        if (!feature) return;
+        const active = id === selectedId;
+        const color = colorFor(feature);
+        marker.setStyle({
+          radius: active ? 12 : 8,
+          weight: active || feature.properties.is_anomaly ? 2.5 : 1.5,
+          color: active || feature.properties.is_anomaly ? "#f4f7fb" : color,
+          fillColor: color,
+        });
+      });
+      renderChips();
+    }
+
+    function metric(label, value) {
+      return `<div><dt>${label}</dt><dd>${value}</dd></div>`;
+    }
+
+    function renderDetail(props) {
+      document.getElementById("zone-name").textContent = props.name;
+      document.getElementById("zone-meta").textContent = `${props.region} · ${props.crop_or_land_type} · ${fmt(props.elevation, 0)} m`;
+      const badge = document.getElementById("risk-badge");
+      if (!props.has_telemetry) {
+        badge.hidden = true;
+        document.getElementById("metrics").innerHTML = metric("Estado", "Sin telemetría");
+        return;
+      }
+      const tone = RISK[props.risk_level] || { color: "#8b97a8", label: props.risk_level };
+      badge.hidden = false;
+      badge.textContent = tone.label + (props.is_anomaly ? " · anomalía" : "");
+      badge.style.background = tone.color;
+      badge.style.color = "#141810";
+      const when = new Date(props.timestamp).toLocaleString("es-ES", {
+        timeZone: "Europe/Madrid",
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+      document.getElementById("metrics").innerHTML = [
+        metric("Lectura", when),
+        metric("Temperatura", fmt(props.temp_c, 1) + " °C"),
+        metric("Humedad aire", fmt(props.humidity_pct, 0) + " %"),
+        metric("Suelo", fmt(props.soil_moisture_m3m3, 3) + " m³/m³"),
+        metric("ET₀", fmt(props.et0_mm, 2) + " mm"),
+        metric("Lluvia", fmt(props.precipitation_mm, 2) + " mm"),
+        metric("VPD", fmt(props.vpd_kpa, 2) + " kPa"),
+        metric("Estrés hídrico", fmt(props.hydric_stress_index, 1)),
+      ].join("");
+    }
+
+    function renderChart(points) {
+      const note = document.getElementById("chart-note");
+      if (chart) {
+        chart.destroy();
+        chart = null;
+      }
+      if (!points.length) {
+        note.textContent = "Esta zona todavía no tiene serie en la ventana de 48 h atrás y 24 h adelante.";
+        return;
+      }
+      const labels = points.map((point) => new Date(point.timestamp).toLocaleString("es-ES", {
+        timeZone: "Europe/Madrid",
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      }));
+      const nowIndex = points.reduce((index, point, position) => (point.is_forecast ? index : position), -1);
+      note.textContent = "Línea discontinua: instante actual. A la derecha, el pronóstico de las próximas 24 h.";
+      chart = new Chart(document.getElementById("chart"), {
+        type: "line",
+        plugins: [nowLine],
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "VPD (kPa)",
+              data: points.map((point) => point.vpd_kpa),
+              borderColor: "#8eb6ff",
+              backgroundColor: "rgba(142, 182, 255, 0.12)",
+              yAxisID: "y",
+              tension: 0.3,
+              pointRadius: 0,
+              borderWidth: 2,
+            },
+            {
+              label: "Humedad del suelo (m³/m³)",
+              data: points.map((point) => point.soil_moisture_m3m3),
+              borderColor: "#6ee7c5",
+              yAxisID: "y2",
+              tension: 0.3,
+              pointRadius: 0,
+              borderWidth: 2,
+            },
+            {
+              label: "Estrés hídrico",
+              data: points.map((point) => point.hydric_stress_index),
+              borderColor: "#ff8a3d",
+              yAxisID: "y1",
+              tension: 0.3,
+              pointRadius: 0,
+              borderWidth: 2,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: { labels: { color: "#93a0b4", boxWidth: 12, font: { family: "Manrope" } } },
+            nowLine: { index: nowIndex },
+          },
+          scales: {
+            x: { ticks: { color: "#93a0b4", maxTicksLimit: 6, font: { family: "IBM Plex Mono", size: 10 } }, grid: { color: "rgba(156,173,196,0.08)" } },
+            y: { position: "left", title: { display: true, text: "VPD kPa", color: "#8eb6ff" }, ticks: { color: "#8eb6ff" }, grid: { color: "rgba(156,173,196,0.08)" }, suggestedMax: 2.5 },
+            y1: { position: "right", min: 0, max: 100, title: { display: true, text: "Estrés", color: "#ff8a3d" }, ticks: { color: "#ff8a3d" }, grid: { drawOnChartArea: false } },
+            y2: { position: "right", offset: true, min: 0, suggestedMax: 0.5, title: { display: true, text: "Suelo", color: "#6ee7c5" }, ticks: { color: "#6ee7c5" }, grid: { drawOnChartArea: false } },
+          },
+        },
+      });
+    }
+
+    async function selectZone(id, options) {
+      selectedId = id;
+      paintSelection();
+      const feature = features.find((item) => item.properties.zone_id === id);
+      if (!feature) return;
+      renderDetail(feature.properties);
+      if (options && options.scroll && window.matchMedia("(max-width: 980px)").matches) {
+        document.getElementById("detail").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+      const token = ++requestToken;
+      try {
+        const response = await fetch(`/api/v1/zones/${id}/timeseries`, { cache: "no-store" });
+        const body = await response.json();
+        if (token !== requestToken) return;
+        if (!response.ok) throw new Error(body.detail || "No se pudo leer la serie");
+        renderChart(body.points || []);
+      } catch (error) {
+        if (token !== requestToken) return;
+        document.getElementById("chart-note").textContent = error.message;
+      }
+    }
+
+    function preferredFeature() {
+      const live = telemetryFeatures();
+      const pool = live.length ? live : features;
+      if (!pool.length) return null;
+      return pool.reduce((best, feature) => {
+        const stress = feature.properties.hydric_stress_index;
+        if (stress === null || stress === undefined) return best;
+        return stress > (best.properties.hydric_stress_index || -1) ? feature : best;
+      });
+    }
+
+    async function loadGeo(options) {
+      const response = await fetch("/api/v1/geojson/latest", { cache: "no-store" });
+      if (!response.ok) throw new Error("No se pudo leer el GeoJSON");
+      const collection = await response.json();
+      features = collection.features || [];
+      renderKpis();
+      renderMap();
+      const keep = features.find((feature) => feature.properties.zone_id === selectedId);
+      const next = keep || preferredFeature();
+      if (next) await selectZone(next.properties.zone_id, { scroll: false });
+      else renderChips();
+      if (!options || !options.keepStatus) {
+        const ready = collection.metadata ? collection.metadata.with_telemetry : 0;
+        setStatus(ready ? "ok" : "running", ready
+          ? `Malla actualizada · ${ready} zonas con telemetría`
+          : "Sin telemetría. Ejecuta el pipeline para traer Open-Meteo.");
+      }
+    }
+
+    document.getElementById("run-etl").addEventListener("click", async () => {
+      const button = document.getElementById("run-etl");
+      button.disabled = true;
+      button.textContent = "Ejecutando pipeline…";
+      setStatus("running", "Extrayendo Open-Meteo y recalculando indicadores…");
+      try {
+        const response = await fetch("/api/v1/etl/trigger", { method: "POST" });
+        const body = await response.json();
+        if (!response.ok) {
+          const detail = body.detail || "El pipeline no pudo completarse";
+          throw new Error(typeof detail === "string" ? detail : "El pipeline no pudo completarse");
+        }
+        setStatus("ok", `Insertadas ${body.rows_inserted} · Actualizadas ${body.rows_updated} · ${Number(body.elapsed_ms).toFixed(0)} ms`);
+        await loadGeo({ keepStatus: true });
+      } catch (error) {
+        setStatus("error", error.message);
+      } finally {
+        button.disabled = false;
+        button.textContent = "Ejecutar Pipeline ETL Ahora";
+      }
+    });
+
+    window.addEventListener("resize", () => map.invalidateSize());
+
+    if (!window.L || !window.Chart) {
+      setStatus("error", "No se pudieron cargar Leaflet o Chart.js.");
+    } else {
+      loadGeo().catch((error) => setStatus("error", error.message));
+    }
+  </script>
+</body>
+</html>

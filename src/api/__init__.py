@@ -1,0 +1,1 @@
+"""Aplicación FastAPI de GeoPulse."""
