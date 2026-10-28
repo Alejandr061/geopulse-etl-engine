@@ -1,0 +1,38 @@
+name: GeoPulse ETL
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  etl:
+    name: Tests y pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Tests unitarios
+        run: pytest
+
+      - name: Ejecutar pipeline ETL
+        env:
+          DATABASE_URL: sqlite:///./geopulse.db
+          LOG_LEVEL: INFO
+        run: python run_etl.py

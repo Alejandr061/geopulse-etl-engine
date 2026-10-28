@@ -1,0 +1,44 @@
+# GeoPulse ETL
+# SQLite por defecto. Para PostgreSQL:
+#   docker compose --profile postgres up -d
+#   DATABASE_URL=postgresql://geopulse:geopulse@postgres:5432/geopulse docker compose up --build
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////data/geopulse.db}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - geopulse-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/geojson/latest', timeout=5)",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_USER: geopulse
+      POSTGRES_PASSWORD: geopulse
+      POSTGRES_DB: geopulse
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  geopulse-data:
+  pgdata:

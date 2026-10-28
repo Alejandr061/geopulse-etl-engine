@@ -1,0 +1,9 @@
+.venv
+venv
+__pycache__
+.pytest_cache
+.git
+*.db
+.env
+.cursor
+agent-transcripts
