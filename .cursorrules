@@ -1,0 +1,10 @@
+# Project Rules: Geospatial & Real-Time Open Data ETL Engine
+
+- **Language & Stack**: Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy 2.0 (SQLite local by default, PostgreSQL/Supabase ready via `DATABASE_URL`), httpx (async requests), Pandas/NumPy, Pytest.
+- **Architecture**: Clean ETL + API separation:
+  - `src/etl/extract.py`: Async HTTP client with retry logic and rate-limit handling.
+  - `src/etl/transform.py`: Vectorized scientific calculations (VPD, Hydric Stress Index, anomaly detection) and Pydantic data quality validation.
+  - `src/etl/load.py`: Idempotent database operations (UPSERT / ON CONFLICT DO UPDATE).
+  - `src/api/`: FastAPI routers serving REST endpoints, GeoJSON `FeatureCollection`, and an interactive dark-mode Leaflet map dashboard.
+  - `src/database/`: SQLAlchemy models, connection pooling, and spatial grid definitions.
+- **Code Standards**: Strict type hinting, structured logging (`logging`), zero hardcoded credentials (use `.env`), and clean docstrings explaining physical formulas.
