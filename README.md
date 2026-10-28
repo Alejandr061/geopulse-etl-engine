@@ -10,6 +10,7 @@ Pipeline ETL sobre Open-Meteo que calcula déficit de presión de vapor y estré
 [![Open-Meteo](https://img.shields.io/badge/Open--Meteo-Forecast%20API-2F80ED)](https://open-meteo.com/)
 [![GitHub Actions](https://github.com/Alejandr061/geopulse-etl-engine/actions/workflows/etl_pipeline.yml/badge.svg)](https://github.com/Alejandr061/geopulse-etl-engine/actions/workflows/etl_pipeline.yml)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
   <img src="assets/dashboard_preview.png" alt="Centro de control GeoPulse: mapa de riesgo del arco mediterráneo y serie de VPD, humedad del suelo y estrés hídrico en Plana Baixa" width="100%" />
@@ -158,3 +159,7 @@ Los timestamps de la base están en UTC.
 ## Datos
 
 Series horarias y estado actual de [Open-Meteo](https://open-meteo.com/): `temperature_2m`, `relative_humidity_2m`, `precipitation`, `et0_fao_evapotranspiration` y `soil_moisture_0_to_7cm`. El mapa usa Leaflet y el basemap oscuro de Esri. CartoDB Dark Matter exige API key y devuelve un mosaico vacío.
+
+## Licencia
+
+[MIT](LICENSE) © 2026 Alejandro Hidalgo. Puedes usar, modificar y distribuir el proyecto conservando el aviso de copyright.
